@@ -2253,8 +2253,9 @@ function rise() {
         sb)
             if [[ ! -f "$ANDROID_KEY_PATH/releasekey.pk8" || ! -f "$ANDROID_KEY_PATH/releasekey.x509.pem" ]]; then
                 echo "Keys not found. Generating keys..."
-                genkeys
+                gk -f
             fi
+            echo "Reminder: Please ensure that you have generated keys using 'gk -f' before running 'rise sb'."
             sign_build ${jCount:--j$(nproc --all)}
             ;;
         b)
