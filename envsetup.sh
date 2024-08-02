@@ -2427,7 +2427,7 @@ function show_help() {
     echo "Options:"
     echo "  -s          Generate keys for simple signing"
     echo "  -f          Generate keys for full build signing"
-    echo "  -h, --help  Show gk instructions"
+    echo "  -h, --help  Show generate keys instructions"
 }
 
 function gk() {
@@ -2435,7 +2435,7 @@ function gk() {
     case "$mode" in
         -h|--help)
             show_help
-            exit 0
+            return 0
             ;;
         -s)
             local key_names=("nfc" "bluetooth" "media" "networkstack" "platform" "releasekey" "sdk_sandbox" "shared" "testkey" "verifiedboot")
@@ -2445,7 +2445,7 @@ function gk() {
             ;;
         *)
             show_help
-            exit 1
+            return 0
             ;;
     esac
     unset key_password
