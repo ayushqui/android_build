@@ -2390,7 +2390,63 @@ function remove_broken_build_tools() {
     rm -rf prebuilts/build-tools/path/*/tar
 }
 
-function genkeys() {
+function sanitize_email() {
+    local email="$1"
+    # Remove characters that are not allowed in RDN
+    local sanitized_email="${email//[^a-zA-Z0-9._@-]/}"
+    echo "$sanitized_email"
+}
+
+function generate_keys() {
+    local email="$1"
+    sanitized_email=$(sanitize_email "$email")
+    local subject="/C=US/ST=California/L=Los Angeles/O=risingOS/OU=risingOS/CN=risingOS/emailAddress=$sanitized_email"
+    echo "Subject string: $subject"
+    local key_names=("${@:2}")
+    rm -rf "$ANDROID_KEY_PATH"
+    mkdir -p "$ANDROID_KEY_PATH"
+    for key_name in "${key_names[@]}"; do
+        if [ -f "$ANDROID_KEY_PATH/$key_name.pk8" ] || [ -f "$ANDROID_KEY_PATH/$key_name.x509.pem" ]; then
+            echo "Deleting existing files for $key_name..."
+            rm -f "$ANDROID_KEY_PATH/$key_name.pk8" "$ANDROID_KEY_PATH/$key_name.x509.pem"
+        fi
+        if [ -n "$key_password" ]; then
+            echo "Executing make_key for $key_name with provided password..."
+            echo "$key_password" | ./development/tools/make_key "$ANDROID_KEY_PATH/$key_name" "$subject"
+        else
+            echo "Executing make_key for $key_name without password..."
+            echo "" | ./development/tools/make_key "$ANDROID_KEY_PATH/$key_name" "$subject"
+        fi
+    done
+}
+
+function show_help() {
+    echo "Usage: gk [option]"
+    echo ""
+    echo "Options:"
+    echo "  -s          Generate keys for simple signing"
+    echo "  -f          Generate keys for full build signing"
+    echo "  -h, --help  Show gk instructions"
+}
+
+function gk() {
+    local mode="$1"
+    case "$mode" in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -s)
+            local key_names=("nfc" "bluetooth" "media" "networkstack" "platform" "releasekey" "sdk_sandbox" "shared" "testkey" "verifiedboot")
+            ;;
+        -f)
+            local key_names=("nfc" "bluetooth" "media" "networkstack" "platform" "releasekey" "sdk_sandbox" "shared" "testcert" "testkey" "verity")
+            ;;
+        *)
+            show_help
+            exit 1
+            ;;
+    esac
     unset key_password
     local git_email=$(git config --global user.email)
     if [ -z "$git_email" ]; then
@@ -2401,24 +2457,21 @@ function genkeys() {
     email=${email:-$git_email}
     read -sp "Enter password (leave empty for no password): " key_password
     echo ""
-    generate_keys() {
-        local email="$1"
-        local subject="/C=US/ST=California/L=Mountain View/O=Android/OU=Android/CN=Android/emailAddress=$email"
-        local key_names=("nfc" "bluetooth" "media" "networkstack" "platform" "releasekey" "sdk_sandbox" "shared" "testcert" "testkey" "verity")
-        mkdir -p "$ANDROID_KEY_PATH"
-        for key_name in "${key_names[@]}"; do
-            if [ -f "$ANDROID_KEY_PATH/$key_name.pk8" ] || [ -f "$ANDROID_KEY_PATH/$key_name.x509.pem" ]; then
-                echo "Deleting existing files for $key_name..."
-                rm -f "$ANDROID_KEY_PATH/$key_name.pk8" "$ANDROID_KEY_PATH/$key_name.x509.pem"
-            fi
-            if [ -n "$key_password" ]; then
-                echo "Executing make_key for $key_name with provided password..."
-                echo "$key_password" | ./development/tools/make_key "$ANDROID_KEY_PATH/$key_name" "$subject"
-            else
-                echo "Executing make_key for $key_name without password..."
-                echo "" | ./development/tools/make_key "$ANDROID_KEY_PATH/$key_name" "$subject"
-            fi
-        done
+    echo "Generating keys using $email..."
+    generate_keys "$email" "${key_names[@]}"
+    echo "PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/lineage-priv/keys/releasekey" > vendor/lineage-priv/keys/keys.mk
+    bazel_build_content="filegroup(
+    name = \"android_certificate_directory\",
+    srcs = glob([
+        \"*.pk8\",
+        \"*.pem\",
+    ]),
+    visibility = [\"//visibility:public\"],
+)"
+    echo "$bazel_build_content" > vendor/lineage-priv/keys/BUILD.bazel
+    if [ "$mode" == "-f" ]; then
+        sanitized_email=$(sanitize_email "$email")
+        local subject="/C=US/ST=California/L=Los Angeles/O=risingOS/OU=risingOS/CN=risingOS/emailAddress=$sanitized_email"
         cp ./development/tools/make_key $ANDROID_KEY_PATH/
         sed -i 's|2048|4096|g' $ANDROID_KEY_PATH/make_key
         for apex in com.android.adbd com.android.adservices com.android.adservices.api com.android.appsearch com.android.art com.android.bluetooth com.android.btservices com.android.cellbroadcast com.android.compos com.android.configinfrastructure com.android.connectivity.resources com.android.conscrypt com.android.devicelock com.android.extservices com.android.graphics.pdf com.android.hardware.biometrics.face.virtual com.android.hardware.biometrics.fingerprint.virtual com.android.hardware.boot com.android.hardware.cas com.android.hardware.wifi com.android.healthfitness com.android.hotspot2.osulogin com.android.i18n com.android.ipsec com.android.media com.android.media.swcodec com.android.mediaprovider com.android.nearby.halfsheet com.android.networkstack.tethering com.android.neuralnetworks com.android.ondevicepersonalization com.android.os.statsd com.android.permission com.android.resolv com.android.rkpd com.android.runtime com.android.safetycenter.resources com.android.scheduling com.android.sdkext com.android.support.apexer com.android.telephony com.android.telephonymodules com.android.tethering com.android.tzdata com.android.uwb com.android.uwb.resources com.android.virt com.android.vndk.current com.android.vndk.current.on_vendor com.android.wifi com.android.wifi.dialog com.android.wifi.resources com.google.pixel.camera.hal com.google.pixel.vibrator.hal com.qorvo.uwb; do
@@ -2429,34 +2482,18 @@ function genkeys() {
             echo "" | $ANDROID_KEY_PATH/make_key $ANDROID_KEY_PATH/$apex "$subject"
             openssl pkcs8 -in $ANDROID_KEY_PATH/$apex.pk8 -inform DER -nocrypt -out $ANDROID_KEY_PATH/$apex.pem
         done
-    }
-    echo "Generating keys using $email..."
-    generate_keys "$email"
-
-    echo "PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/lineage-priv/keys/releasekey" > vendor/lineage-priv/keys/keys.mk
-
-    bazel_build_content="filegroup(
-    name = \"android_certificate_directory\",
-    srcs = glob([
-        \"*.pk8\",
-        \"*.pem\",
-    ]),
-    visibility = [\"//visibility:public\"],
-)"
-    echo "$bazel_build_content" > vendor/lineage-priv/keys/BUILD.bazel
+    fi
 }
 
 function remove_keys() {
     local key_mk="vendor/lineage-priv/keys/keys.mk"
     local build_bazel="vendor/lineage-priv/keys/BUILD.bazel"
-
     if [ -f "$key_mk" ]; then
         echo "Removing $key_mk..."
         rm -f "$key_mk"
     else
         echo "$key_mk does not exist."
     fi
-
     if [ -f "$build_bazel" ]; then
         echo "Removing $build_bazel..."
         rm -f "$build_bazel"
