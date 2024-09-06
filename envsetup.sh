@@ -2395,7 +2395,10 @@ function generate_keys() {
     local subject="/C=US/ST=California/L=Los Angeles/O=risingOS/OU=risingOS/CN=risingOS"
     echo "Subject string: $subject"
     local key_names=("${@:2}")
-    rm -rf "$ANDROID_KEY_PATH"
+    if [ -d "$ANDROID_KEY_PATH" ]; then
+        echo "Cleaning up $ANDROID_KEY_PATH while preserving .git..."
+        find "$ANDROID_KEY_PATH" -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
+    fi
     mkdir -p "$ANDROID_KEY_PATH"
     for key_name in "${key_names[@]}"; do
         if [ -f "$ANDROID_KEY_PATH/$key_name.pk8" ] || [ -f "$ANDROID_KEY_PATH/$key_name.x509.pem" ]; then
