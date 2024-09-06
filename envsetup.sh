@@ -2405,13 +2405,8 @@ function generate_keys() {
             echo "Deleting existing files for $key_name..."
             rm -f "$ANDROID_KEY_PATH/$key_name.pk8" "$ANDROID_KEY_PATH/$key_name.x509.pem"
         fi
-        if [ -n "$key_password" ]; then
-            echo "Executing make_key for $key_name with provided password..."
-            echo "$key_password" | ./development/tools/make_key "$ANDROID_KEY_PATH/$key_name" "$subject"
-        else
-            echo "Executing make_key for $key_name without password..."
-            echo "" | ./development/tools/make_key "$ANDROID_KEY_PATH/$key_name" "$subject"
-        fi
+        echo "Executing make_key for $key_name without password..."
+        echo "" | ./development/tools/make_key "$ANDROID_KEY_PATH/$key_name" "$subject"
     done
 }
 
@@ -2442,9 +2437,6 @@ function gk() {
             return 0
             ;;
     esac
-    unset key_password
-    read -sp "Enter password (leave empty for no password): " key_password
-    echo ""
     echo "Generating keys..."
     generate_keys "${key_names[@]}"
     echo "PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/lineage-priv/keys/releasekey" > vendor/lineage-priv/keys/keys.mk
