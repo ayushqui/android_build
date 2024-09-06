@@ -2391,17 +2391,8 @@ function remove_broken_build_tools() {
     rm -rf prebuilts/build-tools/path/*/tar
 }
 
-function sanitize_email() {
-    local email="$1"
-    # Remove characters that are not allowed in RDN
-    local sanitized_email="${email//[^a-zA-Z0-9._@-]/}"
-    echo "$sanitized_email"
-}
-
 function generate_keys() {
-    local email="$1"
-    sanitized_email=$(sanitize_email "$email")
-    local subject="/C=US/ST=California/L=Los Angeles/O=risingOS/OU=risingOS/CN=risingOS/emailAddress=$sanitized_email"
+    local subject="/C=US/ST=California/L=Los Angeles/O=risingOS/OU=risingOS/CN=risingOS"
     echo "Subject string: $subject"
     local key_names=("${@:2}")
     rm -rf "$ANDROID_KEY_PATH"
@@ -2449,17 +2440,10 @@ function gk() {
             ;;
     esac
     unset key_password
-    local git_email=$(git config --global user.email)
-    if [ -z "$git_email" ]; then
-        echo "Git email address is not set. Please set it using 'git config --global user.email'."
-        exit 1
-    fi
-    read -p "Enter your email address (leave empty to use Git email: $git_email): " email
-    email=${email:-$git_email}
     read -sp "Enter password (leave empty for no password): " key_password
     echo ""
-    echo "Generating keys using $email..."
-    generate_keys "$email" "${key_names[@]}"
+    echo "Generating keys..."
+    generate_keys "${key_names[@]}"
     echo "PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/lineage-priv/keys/releasekey" > vendor/lineage-priv/keys/keys.mk
     bazel_build_content="filegroup(
     name = \"android_certificate_directory\",
@@ -2471,8 +2455,7 @@ function gk() {
 )"
     echo "$bazel_build_content" > vendor/lineage-priv/keys/BUILD.bazel
     if [ "$mode" == "-f" ]; then
-        sanitized_email=$(sanitize_email "$email")
-        local subject="/C=US/ST=California/L=Los Angeles/O=risingOS/OU=risingOS/CN=risingOS/emailAddress=$sanitized_email"
+        local subject="/C=US/ST=California/L=Los Angeles/O=risingOS/OU=risingOS/CN=risingOS"
         cp ./development/tools/make_key $ANDROID_KEY_PATH/
         sed -i 's|2048|4096|g' $ANDROID_KEY_PATH/make_key
         for apex in com.android.adbd com.android.adservices com.android.adservices.api com.android.appsearch com.android.art com.android.bluetooth com.android.btservices com.android.cellbroadcast com.android.compos com.android.configinfrastructure com.android.connectivity.resources com.android.conscrypt com.android.devicelock com.android.extservices com.android.graphics.pdf com.android.hardware.biometrics.face.virtual com.android.hardware.biometrics.fingerprint.virtual com.android.hardware.boot com.android.hardware.cas com.android.hardware.wifi com.android.healthfitness com.android.hotspot2.osulogin com.android.i18n com.android.ipsec com.android.media com.android.media.swcodec com.android.mediaprovider com.android.nearby.halfsheet com.android.networkstack.tethering com.android.neuralnetworks com.android.ondevicepersonalization com.android.os.statsd com.android.permission com.android.resolv com.android.rkpd com.android.runtime com.android.safetycenter.resources com.android.scheduling com.android.sdkext com.android.support.apexer com.android.telephony com.android.telephonymodules com.android.tethering com.android.tzdata com.android.uwb com.android.uwb.resources com.android.virt com.android.vndk.current com.android.vndk.current.on_vendor com.android.wifi com.android.wifi.dialog com.android.wifi.resources com.google.pixel.camera.hal com.google.pixel.vibrator.hal com.qorvo.uwb; do
