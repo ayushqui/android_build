@@ -2394,7 +2394,7 @@ function remove_broken_build_tools() {
 function generate_keys() {
     local subject="/C=US/ST=California/L=Los Angeles/O=risingOS/OU=risingOS/CN=risingOS"
     echo "Subject string: $subject"
-    local key_names=("${@:2}")
+    local key_names=("${@}")
     if [ -d "$ANDROID_KEY_PATH" ]; then
         echo "Cleaning up $ANDROID_KEY_PATH while preserving .git..."
         find "$ANDROID_KEY_PATH" -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
